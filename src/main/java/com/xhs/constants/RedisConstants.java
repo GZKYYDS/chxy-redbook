@@ -1,4 +1,4 @@
-package com.xhs.utils;
+package com.xhs.constants;
 
 public class RedisConstants {
     public static final String LOGIN_CODE_KEY = "login:code:";

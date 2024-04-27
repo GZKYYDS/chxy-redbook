@@ -8,7 +8,7 @@ import com.xhs.entity.Blog;
 import com.xhs.entity.User;
 import com.xhs.service.IBlogService;
 import com.xhs.service.IUserService;
-import com.xhs.utils.SystemConstants;
+import com.xhs.constants.SystemConstants;
 import com.xhs.utils.UserHolder;
 import org.springframework.web.bind.annotation.*;
 
