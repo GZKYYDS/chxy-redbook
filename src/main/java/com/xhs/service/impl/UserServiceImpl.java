@@ -1,6 +1,8 @@
 package com.xhs.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.lang.UUID;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xhs.dto.LoginFormDTO;
@@ -11,10 +13,17 @@ import com.xhs.mapper.UserMapper;
 import com.xhs.service.IUserService;
 import com.xhs.utils.RegexUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpSession;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.xhs.constants.RedisConstants.*;
 import static com.xhs.constants.SystemConstants.USER_NICK_NAME_PREFIX;
 
 /**
@@ -24,6 +33,8 @@ import static com.xhs.constants.SystemConstants.USER_NICK_NAME_PREFIX;
 @Service
 public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
 
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
     /**
      * 发送手机验证码
      *
@@ -42,7 +53,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	//3.如果符合生成验证码
 	String code = RandomUtil.randomNumbers(6);
 	//保存验证码
-	session.setAttribute("code", code);
+	stringRedisTemplate.opsForValue().set(LOGIN_CODE_KEY + phone, code, LOGIN_CODE_TTL, TimeUnit.MINUTES);
 	//4.发送验证码
 	log.debug("发送短信验证码成功，验证码：{}", code);        //模拟
 	//返回
@@ -58,34 +69,46 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
      */
     @Override
     public Result login(LoginFormDTO loginForm, HttpSession session) {
-	//1.校验手机号
+	// 1.校验手机号
 	String phone = loginForm.getPhone();
 	if (RegexUtils.isPhoneInvalid(phone)) {
-	    //2.如果不符合要求，返回错误信息
-	    return Result.fail("手机号格式不正确");
+	    // 2.如果不符合，返回错误信息
+	    return Result.fail("手机号格式错误！");
 	}
-	//2.校验验证码
-	//从session中获取验证码
-	Object cacheCode = session.getAttribute("code");
+	// 3.从redis获取验证码并校验
+	String cacheCode = stringRedisTemplate.opsForValue().get(LOGIN_CODE_KEY + phone);
 	String code = loginForm.getCode();
-	//3.不一致返回错误信息
-	if (cacheCode == null || !cacheCode.toString().equals(code)) {
+	if (cacheCode == null || !cacheCode.equals(code)) {
+	    // 不一致，报错
 	    return Result.fail("验证码错误");
 	}
-	//4.如果一致， 根据手机号查询用户信息
+
+	// 4.一致，根据手机号查询用户 select * from tb_user where phone = ?
 	User user = query().eq("phone", phone).one();
 
-	//判断用户是否存在
-	//5.如果不存在，创建新用户
+	// 5.判断用户是否存在
 	if (user == null) {
+	    // 6.不存在，创建新用户并保存
 	    user = createUserWithPhone(phone);
 	}
-	//6.如果存在保存用户到session
-	session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
 
-	return Result.ok();
-	//不需要返回凭证，因为后续的请求都会带上session  session原理是cookie
-	//每一个session都有一个唯一的sessionid，这个sessionid会在响应头中返回给浏览器，浏览器会保存在cookie中
+	// 7.保存用户信息到 redis中
+	// 7.1.随机生成token，作为登录令牌
+	String token = UUID.randomUUID().toString(true);
+	// 7.2.将User对象转为HashMap存储
+	UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+	Map<String, Object> userMap = BeanUtil.beanToMap(userDTO, new HashMap<>(),
+		CopyOptions.create()
+			.setIgnoreNullValue(true)
+			.setFieldValueEditor((fieldName, fieldValue) -> fieldValue.toString()));
+	// 7.3.存储
+	String tokenKey = LOGIN_USER_KEY + token;
+	stringRedisTemplate.opsForHash().putAll(tokenKey, userMap);
+	// 7.4.设置token有效期
+	stringRedisTemplate.expire(tokenKey, LOGIN_USER_TTL, TimeUnit.MINUTES);
+
+	// 8.返回token
+	return Result.ok(token);
     }
 
     private User createUserWithPhone(String phone) {
