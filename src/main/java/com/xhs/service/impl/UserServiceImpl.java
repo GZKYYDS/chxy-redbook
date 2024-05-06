@@ -1,9 +1,11 @@
 package com.xhs.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.RandomUtil;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xhs.dto.LoginFormDTO;
 import com.xhs.dto.Result;
+import com.xhs.dto.UserDTO;
 import com.xhs.entity.User;
 import com.xhs.mapper.UserMapper;
 import com.xhs.service.IUserService;
@@ -79,7 +81,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 	    user = createUserWithPhone(phone);
 	}
 	//6.如果存在保存用户到session
-	session.setAttribute("user", user);
+	session.setAttribute("user", BeanUtil.copyProperties(user, UserDTO.class));
 
 	return Result.ok();
 	//不需要返回凭证，因为后续的请求都会带上session  session原理是cookie
