@@ -1,10 +1,7 @@
 package com.xhs.service;
 
-import com.xhs.dto.Result;
-import com.xhs.entity.ShopType;
 import com.baomidou.mybatisplus.extension.service.IService;
-
-import java.util.List;
+import com.xhs.entity.ShopType;
 
 /**
  * 商店类型服务类
@@ -12,10 +9,10 @@ import java.util.List;
 public interface IShopTypeService extends IService<ShopType> {
 
 
-    /**
-     * 查询商店类型列表
-     *
-     * @return 商店类型列表
-     */
-    Result queryTypeList();
+//    /**
+//     * 查询商店类型列表
+//     *
+//     * @return 商店类型列表
+//     */
+//    Result queryTypeList();
 }
