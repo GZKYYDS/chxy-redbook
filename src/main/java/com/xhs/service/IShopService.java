@@ -15,7 +15,7 @@ public interface IShopService extends IService<Shop> {
      * @param id 商铺id
      * @return 商铺详情数据
      */
-    Result queryById(Long id);
+    Result queryById(Long id) throws InterruptedException;
 
     /**
      * 更新商铺信息
