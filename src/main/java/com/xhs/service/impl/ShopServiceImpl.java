@@ -3,17 +3,16 @@ package com.xhs.service.impl;
 import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xhs.dto.Result;
 import com.xhs.entity.Shop;
 import com.xhs.mapper.ShopMapper;
 import com.xhs.service.IShopService;
-import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.annotation.Resource;
-
 import java.util.concurrent.TimeUnit;
 
 import static com.xhs.constants.RedisConstants.*;
@@ -67,7 +66,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 	try {
 	    boolean isLock = tryLock(lockKey);
 	    //2.判断是否获取成功
-	    if(!isLock){
+	    if (!isLock) {
 		//失败，等待一段时间后重试
 		Thread.sleep(50);
 		return queryWithMutex(id);
@@ -92,7 +91,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
 	    stringRedisTemplate.opsForValue().set(key, JSONUtil.toJsonStr(shop), CACHE_SHOP_TTL, TimeUnit.MINUTES);//设置过期时间
 	} catch (InterruptedException e) {
 	    throw new RuntimeException(e);
-	}finally {
+	} finally {
 	    //释放锁
 	    unlock(lockKey);
 	}
@@ -111,6 +110,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     private void unlock(String key) {
 	stringRedisTemplate.delete(key);
     }
+
+
 
     /**
      * 更新商铺信息
