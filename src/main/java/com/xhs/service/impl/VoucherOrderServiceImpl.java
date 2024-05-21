@@ -32,7 +32,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
      * @return Result
      */
     @Override
-    @Transactional	//开启事务
+    @Transactional        //开启事务
     public Result seckillVoucher(Long voucherId) {
 	//1.查询代金券信息
 	SeckillVoucher voucher = seckillVoucherService.getById(voucherId);
@@ -51,7 +51,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	//5.扣减库存
 	boolean success = seckillVoucherService.update()
 		.setSql("stock = stock - 1")
-		.eq("voucher_id", voucherId).update();
+		.eq("voucher_id", voucherId)
+		.gt("stock", 0)        //乐观锁
+		.update();
 	if (!success) {
 	    return Result.fail("扣减库存失败");
 	}
@@ -65,7 +67,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	voucherOrder.setUserId(userId);
 	//代金券id
 	voucherOrder.setVoucherId(voucherId);
-	save(voucherOrder);	//保存订单
+	save(voucherOrder);        //保存订单
 	//7.返回订单id
 	return Result.ok(orderId);        //返回订单id
     }
