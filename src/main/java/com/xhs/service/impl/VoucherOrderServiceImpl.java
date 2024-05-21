@@ -9,6 +9,7 @@ import com.xhs.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xhs.utils.RedisIdWorker;
 import com.xhs.utils.UserHolder;
+import org.springframework.aop.framework.AopContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +49,43 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	if (voucher.getStock() < 1) {
 	    return Result.fail("库存不足");
 	}
+	//用户id
+	Long userId = UserHolder.getUser().getId();
+
+	//7.返回订单id
+	synchronized (userId.toString().intern()) {
+	    //代理对象
+	    IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
+	    //获取锁之后才会创建事务，事务提交之后才会释放锁
+	    //这样就保证了同一个用户只能秒杀一次，解决并发安全问题
+	    return proxy.createVoucherOrder(voucherId);//返回订单id
+	}        //如直接调用是不会走代理的（this），所以需要通过代理对象调用
+    }
+
+
+    @Transactional        //开启事务
+    public Result createVoucherOrder(Long voucherId) {
+	//一人一单
+	//用户id
+	Long userId = UserHolder.getUser().getId();
+
+	/*
+	  由于要实现一人一单，所以这个userid应该是不同的，因此需要加锁
+	  但是这里的锁是不够的，因为这个锁只能保证一个线程进入这个方法，但是不能保证一个用户只能秒杀一次
+	  因此需要加锁的是userid，而不是这个方法
+	  但是这里的userid是Long类型，是一个对象，所以不能直接加锁，需要加锁的是这个对象的值
+	  因此初步判断需要加锁的是userid.toString()，但是底层toString是new一个新的对象，所以这里的userid还是不同的
+	  因此需要加锁的是userid.toString().intern()，这样就能保证同一个用户只能秒杀一次
+
+	 */
+//	synchronized (userId.toString().intern()) {        //intern()方法返回字符串对象的规范化表示形式
+	int count = query().eq("user_id", userId)
+		.eq("voucher_id", voucherId)
+		.count();
+	if (count > 0) {
+	    return Result.fail("每人限购一单");
+	}
+
 	//5.扣减库存
 	boolean success = seckillVoucherService.update()
 		.setSql("stock = stock - 1")
@@ -62,13 +100,18 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	//订单id
 	Long orderId = redisIdWorker.nextId("order");
 	voucherOrder.setId(orderId);
-	//用户id
-	Long userId = UserHolder.getUser().getId();
+
 	voucherOrder.setUserId(userId);
 	//代金券id
 	voucherOrder.setVoucherId(voucherId);
 	save(voucherOrder);        //保存订单
-	//7.返回订单id
-	return Result.ok(orderId);        //返回订单id
+	return Result.ok(orderId);//返回订单id
     }
+	/*
+	由于事务是在方法上的，所以当这个方法执行完之后，事务就会提交，这个锁也会释放；
+	然而这里的事务是由spring管理的，所以spring会在这个方法执行完之后，提交事务，释放锁
+	那么这个锁已经释放了，意味着下一个线程可以进入这个方法，在上一个线程还没有执行完之前，下一个线程就可以进入这个方法
+	而在spring未提交事务之前，这个方法是不会返回的，因此下一个线程就可以进入这个方法，这样就会导致一个用户可以秒杀多次
+	 */
 }
+
