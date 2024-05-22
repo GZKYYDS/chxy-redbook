@@ -8,8 +8,10 @@ import com.xhs.service.ISeckillVoucherService;
 import com.xhs.service.IVoucherOrderService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.xhs.utils.RedisIdWorker;
+import com.xhs.utils.SimpleRedisLock;
 import com.xhs.utils.UserHolder;
 import org.springframework.aop.framework.AopContext;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,9 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
     @Resource
     private RedisIdWorker redisIdWorker;
+
+    @Resource
+    private StringRedisTemplate stringRedisTemplate;
 
     /**
      * 秒杀代金券
@@ -51,15 +56,26 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	}
 	//用户id
 	Long userId = UserHolder.getUser().getId();
-
+	//创建锁对象
+	SimpleRedisLock simpleRedisLock = new SimpleRedisLock("lock:" + userId, stringRedisTemplate);
+	//获取锁
+	boolean isLock = simpleRedisLock.tryLock(500);
+	//如果获取锁失败
+	if (!isLock) {
+	    return Result.fail("请勿重复下单");
+	}
 	//7.返回订单id
-	synchronized (userId.toString().intern()) {
-	    //代理对象
+	//代理对象
+	try {
 	    IVoucherOrderService proxy = (IVoucherOrderService) AopContext.currentProxy();
 	    //获取锁之后才会创建事务，事务提交之后才会释放锁
 	    //这样就保证了同一个用户只能秒杀一次，解决并发安全问题
 	    return proxy.createVoucherOrder(voucherId);//返回订单id
-	}        //如直接调用是不会走代理的（this），所以需要通过代理对象调用
+	} finally {
+	    //释放锁
+	    simpleRedisLock.unlock();
+	}
+
     }
 
 
