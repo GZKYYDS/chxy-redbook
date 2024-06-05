@@ -15,7 +15,7 @@ import java.util.UUID;
 @Slf4j
 @RestController
 @RequestMapping("upload")
-public class UploadController {
+public class    UploadController {
 
     @PostMapping("blog")
     public Result uploadImage(@RequestParam("file") MultipartFile image) {

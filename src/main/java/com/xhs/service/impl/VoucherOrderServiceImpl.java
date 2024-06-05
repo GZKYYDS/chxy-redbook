@@ -69,7 +69,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 	    while (true) {
 
 		try {
-		    //获取队列中的订单信息
+		    //获取消息队列中的订单信息
 		    VoucherOrder voucherOrder = orderTasks.take();
 		    //创建订单
 		    handleVoucherOrder(voucherOrder);
@@ -77,6 +77,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
 		} catch (Exception e) {
 		    log.error("处理订单异常", e);
+
 		}
 
 	    }
@@ -125,13 +126,15 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
     @Transactional        //开启事务
     public Result seckillVoucher(Long voucherId) {
 	Long userId = UserHolder.getUser().getId();
-
+	//订单id
+	Long orderId = redisIdWorker.nextId("order");
 	//1.执行lua脚本
 	Long result = stringRedisTemplate.execute(
 		SECKILL_SCRIPT,
 		Collections.emptyList(),
 		voucherId.toString(),
-		userId.toString()
+		userId.toString(),
+		orderId.toString()
 	);
 	//2.判断是否为0
 	int r = Objects.requireNonNull(result).intValue();
@@ -142,8 +145,7 @@ public class VoucherOrderServiceImpl extends ServiceImpl<VoucherOrderMapper, Vou
 
 	//4.为0，有购买资格，将下单信息保存到阻塞队列
 	VoucherOrder voucherOrder = new VoucherOrder();
-	//订单id
-	Long orderId = redisIdWorker.nextId("order");
+
 	//用户id
 	voucherOrder.setUserId(userId);
 	//代金券id
